@@ -12,14 +12,15 @@ type cacher struct {
 
 func (c *cacher) SendData(d *ndn.Data) {
 	c.Sender.SendData(d)
-	c.cache.Add(d)
+	go c.cache.Add(d)
 }
 
 func (c *cacher) Hijack() mux.Sender {
 	return c.Sender
 }
 
-func Cacher(c *Cache) mux.Middleware {
+func Cacher(file string) mux.Middleware {
+	c, _ := New(file)
 	return func(next mux.Handler) mux.Handler {
 		return mux.HandlerFunc(func(w mux.Sender, i *ndn.Interest) {
 			d := c.Get(i)
