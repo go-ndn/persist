@@ -11,8 +11,8 @@ type cacher struct {
 }
 
 func (c *cacher) SendData(d *ndn.Data) {
+	c.cache.Add(d)
 	c.Sender.SendData(d)
-	go c.cache.Add(d)
 }
 
 func (c *cacher) Hijack() ndn.Sender {
