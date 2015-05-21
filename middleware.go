@@ -1,6 +1,8 @@
 package persist
 
 import (
+	"fmt"
+
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 )
@@ -20,9 +22,13 @@ func (c *cacher) Hijack() ndn.Sender {
 }
 
 func Cacher(file string) mux.Middleware {
-	c, _ := New(file)
+	c, err := New(file)
 	return func(next mux.Handler) mux.Handler {
 		return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 			d := c.Get(i)
 			if d == nil {
 				next.ServeNDN(&cacher{Sender: w, cache: c}, i)
