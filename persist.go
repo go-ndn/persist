@@ -63,21 +63,11 @@ func (c *Cache) Get(i *ndn.Interest) (match *ndn.Data) {
 			if !i.Selectors.Match(string(k), ent.Data, ent.Time) {
 				continue
 			}
-			if match == nil {
+			if i.Selectors.ChildSelector == 0 {
 				match = ent.Data
-			} else {
-				cmp := ent.Data.Name.Compare(match.Name)
-				switch i.Selectors.ChildSelector {
-				case 0:
-					if cmp < 0 {
-						match = ent.Data
-					}
-				case 1:
-					if cmp > 0 {
-						match = ent.Data
-					}
-				}
+				return nil
 			}
+			match = ent.Data
 		}
 		return nil
 	})
