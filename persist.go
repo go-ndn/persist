@@ -9,7 +9,7 @@ import (
 	"github.com/go-ndn/ndn"
 )
 
-type Cache struct {
+type cache struct {
 	*bolt.DB
 }
 
@@ -17,16 +17,16 @@ var (
 	mainBucket = []byte("main")
 )
 
-func New(file string) (c *Cache, err error) {
+func New(file string) (c ndn.Cache, err error) {
 	db, err := bolt.Open(file, 0600, nil)
 	if err != nil {
 		return
 	}
-	c = &Cache{DB: db}
-	c.Update(func(tx *bolt.Tx) (err error) {
+	db.Update(func(tx *bolt.Tx) (err error) {
 		_, err = tx.CreateBucketIfNotExists(mainBucket)
 		return
 	})
+	c = &cache{DB: db}
 	return
 }
 
@@ -35,7 +35,7 @@ type entry struct {
 	Time time.Time
 }
 
-func (c *Cache) Add(d *ndn.Data) {
+func (c *cache) Add(d *ndn.Data) {
 	c.Update(func(tx *bolt.Tx) (err error) {
 		buf := new(bytes.Buffer)
 		enc := gob.NewEncoder(buf)
@@ -51,7 +51,7 @@ func (c *Cache) Add(d *ndn.Data) {
 	})
 }
 
-func (c *Cache) Get(i *ndn.Interest) (match *ndn.Data) {
+func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 	c.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(mainBucket).Cursor()
 		prefix := []byte(i.Name.String())
