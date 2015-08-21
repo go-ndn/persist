@@ -7,12 +7,12 @@ import (
 
 type cacher struct {
 	ndn.Sender
-	cache ndn.Cache
+	ndn.Cache
 }
 
 func (c *cacher) SendData(d *ndn.Data) {
 	c.Sender.SendData(d)
-	go c.cache.Add(d)
+	go c.Add(d)
 }
 
 func (c *cacher) Hijack() ndn.Sender {
@@ -28,7 +28,7 @@ func Cacher(file string) mux.Middleware {
 		return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
 			d := c.Get(i)
 			if d == nil {
-				next.ServeNDN(&cacher{Sender: w, cache: c}, i)
+				next.ServeNDN(&cacher{Sender: w, Cache: c}, i)
 			} else {
 				w.SendData(d)
 			}

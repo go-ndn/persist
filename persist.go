@@ -2,11 +2,11 @@ package persist
 
 import (
 	"bytes"
-	"encoding/gob"
 	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/go-ndn/ndn"
+	"github.com/go-ndn/tlv"
 )
 
 type cache struct {
@@ -31,22 +31,20 @@ func New(file string) (c ndn.Cache, err error) {
 }
 
 type entry struct {
-	Data *ndn.Data
-	Time time.Time
+	Data *ndn.Data `tlv:"2"`
+	Time time.Time `tlv:"3"`
 }
 
 func (c *cache) Add(d *ndn.Data) {
 	c.Update(func(tx *bolt.Tx) (err error) {
-		buf := new(bytes.Buffer)
-		enc := gob.NewEncoder(buf)
-		err = enc.Encode(entry{
+		b, err := tlv.MarshalByte(entry{
 			Data: d,
 			Time: time.Now(),
-		})
+		}, 1)
 		if err != nil {
 			return
 		}
-		err = tx.Bucket(mainBucket).Put([]byte(d.Name.String()), buf.Bytes())
+		err = tx.Bucket(mainBucket).Put([]byte(d.Name.String()), b)
 		return
 	})
 }
@@ -58,8 +56,10 @@ func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 
 		for k, v := c.Seek(prefix); bytes.HasPrefix(k, prefix); k, v = c.Next() {
 			var ent entry
-			dec := gob.NewDecoder(bytes.NewReader(v))
-			dec.Decode(&ent)
+			err := tlv.UnmarshalByte(v, &ent, 1)
+			if err != nil {
+				continue
+			}
 			if !i.Selectors.Match(string(k), ent.Data, ent.Time) {
 				continue
 			}
