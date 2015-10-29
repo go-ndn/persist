@@ -32,14 +32,14 @@ func New(file string) (c ndn.Cache, err error) {
 
 type entry struct {
 	Data *ndn.Data `tlv:"2"`
-	Time time.Time `tlv:"3"`
+	Time uint64    `tlv:"3"`
 }
 
 func (c *cache) Add(d *ndn.Data) {
 	c.Update(func(tx *bolt.Tx) (err error) {
 		b, err := tlv.MarshalByte(entry{
 			Data: d,
-			Time: time.Now(),
+			Time: uint64(time.Now().Unix()),
 		}, 1)
 		if err != nil {
 			return
@@ -60,7 +60,8 @@ func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 			if err != nil {
 				continue
 			}
-			if !i.Selectors.Match(string(k), ent.Data, ent.Time) {
+			t := time.Unix(int64(ent.Time), 0)
+			if !i.Selectors.Match(string(k), ent.Data, t) {
 				continue
 			}
 			if i.Selectors.ChildSelector == 0 {
