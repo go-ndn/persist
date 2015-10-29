@@ -2,7 +2,6 @@ package persist
 
 import (
 	"bytes"
-	"log"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -62,7 +61,6 @@ func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 				continue
 			}
 			t := time.Unix(int64(ent.Time), 0)
-			log.Print(t)
 			if !i.Selectors.Match(string(k), ent.Data, t) {
 				continue
 			}
