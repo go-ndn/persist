@@ -37,7 +37,7 @@ type entry struct {
 
 func (c *cache) Add(d *ndn.Data) {
 	c.Update(func(tx *bolt.Tx) (err error) {
-		b, err := tlv.MarshalByte(entry{
+		b, err := tlv.Marshal(entry{
 			Data: d,
 			Time: time.Now(),
 		}, 1)
@@ -56,7 +56,7 @@ func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 
 		for k, v := c.Seek(prefix); bytes.HasPrefix(k, prefix); k, v = c.Next() {
 			var ent entry
-			err := tlv.UnmarshalByte(v, &ent, 1)
+			err := tlv.Unmarshal(v, &ent, 1)
 			if err != nil {
 				continue
 			}
