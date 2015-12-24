@@ -60,7 +60,8 @@ func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 			if err != nil {
 				continue
 			}
-			if !i.Selectors.Match(string(k), ent.Data) {
+
+			if !i.Selectors.Match(ent.Data, i.Name.Len()) {
 				continue
 			}
 			if i.Selectors.MustBeFresh && time.Since(ent.Time) > time.Duration(ent.Data.MetaInfo.FreshnessPeriod)*time.Millisecond {
