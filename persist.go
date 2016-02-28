@@ -1,3 +1,4 @@
+// Package persist implements persistent content store.
 package persist
 
 import (
@@ -17,6 +18,12 @@ var (
 	mainBucket = []byte("main")
 )
 
+// New creates a persistent content store.
+//
+// By design, reading from this store is significantly
+// faster than writing new entry.
+// This store will not delete any old entry.
+// When the file is opened, invoking New again will block.
 func New(file string) (c ndn.Cache, err error) {
 	db, err := bolt.Open(file, 0600, nil)
 	if err != nil {
