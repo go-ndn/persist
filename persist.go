@@ -51,15 +51,24 @@ func (c *cache) Add(d *ndn.Data) {
 		if err != nil {
 			return
 		}
-		err = tx.Bucket(mainBucket).Put([]byte(d.Name.String()), b)
+		err = tx.Bucket(mainBucket).Put(bucketKey(d.Name), b)
 		return
 	})
+}
+
+// bucketKey creates a new bucket key.
+func bucketKey(name ndn.Name) []byte {
+	s := name.String()
+	b := make([]byte, len(s)+1)
+	copy(b, s)
+	b[len(b)-1] = '/'
+	return b
 }
 
 func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 	c.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(mainBucket).Cursor()
-		prefix := []byte(i.Name.String())
+		prefix := bucketKey(i.Name)
 
 		for k, v := c.Seek(prefix); bytes.HasPrefix(k, prefix); k, v = c.Next() {
 			var ent entry

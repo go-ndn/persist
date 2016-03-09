@@ -17,7 +17,7 @@ func TestCache(t *testing.T) {
 		"/A",
 		"/A",
 		"/A/B/C",
-		"/B",
+		"/BB",
 	} {
 		d := &ndn.Data{
 			Name: ndn.NewName(test),
@@ -30,6 +30,7 @@ func TestCache(t *testing.T) {
 	}{
 		{"/A", "/A/B/C"},
 		{"/A/B", "/A/B/C"},
+		{"/B", ""},
 		{"/C", ""},
 	} {
 		d := c.Get(&ndn.Interest{
