@@ -2,7 +2,7 @@
 package persist
 
 import (
-	"bytes"
+	"crypto/sha256"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -24,17 +24,12 @@ var (
 // faster than writing new entry.
 // This store will not delete any old entry.
 // When the file is opened, invoking New again will block.
-func New(file string) (c ndn.Cache, err error) {
+func New(file string) (ndn.Cache, error) {
 	db, err := bolt.Open(file, 0600, nil)
 	if err != nil {
-		return
+		return nil, err
 	}
-	db.Update(func(tx *bolt.Tx) (err error) {
-		_, err = tx.CreateBucketIfNotExists(mainBucket)
-		return
-	})
-	c = &cache{DB: db}
-	return
+	return &cache{DB: db}, nil
 }
 
 type entry struct {
@@ -43,52 +38,124 @@ type entry struct {
 }
 
 func (c *cache) Add(d *ndn.Data) {
-	c.Update(func(tx *bolt.Tx) (err error) {
+	c.Update(func(tx *bolt.Tx) error {
+		h := sha256.New()
+		err := d.WriteTo(tlv.NewWriter(h))
+		if err != nil {
+			return err
+		}
+
 		b, err := tlv.Marshal(entry{
 			Data: d,
 			Time: time.Now(),
 		}, 1)
 		if err != nil {
-			return
+			return err
 		}
-		err = tx.Bucket(mainBucket).Put(bucketKey(d.Name), b)
-		return
+
+		bucket, err := tx.CreateBucketIfNotExists(mainBucket)
+		if err != nil {
+			return err
+		}
+		for _, component := range d.Name.Components {
+			bucket, err = bucket.CreateBucketIfNotExists(component)
+			if err != nil {
+				return err
+			}
+		}
+		return bucket.Put(h.Sum(nil), b)
 	})
 }
 
-// bucketKey creates a new bucket key.
-func bucketKey(name ndn.Name) []byte {
-	s := name.String()
-	b := make([]byte, len(s)+1)
-	copy(b, s)
-	b[len(b)-1] = '/'
-	return b
-}
-
 func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
+	sel := func(v []byte) bool {
+		if v == nil {
+			return false
+		}
+		var ent entry
+		err := tlv.Unmarshal(v, &ent, 1)
+		if err != nil {
+			return false
+		}
+		if !i.Selectors.Match(ent.Data, i.Name.Len()) {
+			return false
+		}
+		if i.Selectors.MustBeFresh && time.Since(ent.Time) > time.Duration(ent.Data.MetaInfo.FreshnessPeriod)*time.Millisecond {
+			return false
+		}
+		match = ent.Data
+		return true
+	}
+
+	var search func(bucket *bolt.Bucket) bool
+	search = func(bucket *bolt.Bucket) bool {
+		cursor := bucket.Cursor()
+
+		// determine search order
+		var first, next func() ([]byte, []byte)
+		if i.Selectors.ChildSelector == 0 {
+			first = cursor.First
+			next = cursor.Next
+		} else {
+			first = cursor.Last
+			next = cursor.Prev
+		}
+
+		// right-most: search nested buckets first
+		if i.Selectors.ChildSelector != 0 {
+			for k, v := first(); k != nil; k, v = next() {
+				if v != nil {
+					continue
+				}
+				if search(bucket.Bucket(k)) {
+					return true
+				}
+			}
+		}
+
+		// search non-nested buckets
+		for k, v := first(); k != nil; k, v = next() {
+			if sel(v) {
+				return true
+			}
+		}
+
+		// left-most: search nested buckets last
+		if i.Selectors.ChildSelector == 0 {
+			for k, v := first(); k != nil; k, v = next() {
+				if v != nil {
+					continue
+				}
+				if search(bucket.Bucket(k)) {
+					return true
+				}
+			}
+		}
+
+		return false
+	}
+
 	c.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(mainBucket).Cursor()
-		prefix := bucketKey(i.Name)
-
-		for k, v := c.Seek(prefix); bytes.HasPrefix(k, prefix); k, v = c.Next() {
-			var ent entry
-			err := tlv.Unmarshal(v, &ent, 1)
-			if err != nil {
-				continue
-			}
-
-			if !i.Selectors.Match(ent.Data, i.Name.Len()) {
-				continue
-			}
-			if i.Selectors.MustBeFresh && time.Since(ent.Time) > time.Duration(ent.Data.MetaInfo.FreshnessPeriod)*time.Millisecond {
-				continue
-			}
-			if i.Selectors.ChildSelector == 0 {
-				match = ent.Data
+		bucket := tx.Bucket(mainBucket)
+		if bucket == nil {
+			return nil
+		}
+		for _, component := range i.Name.Components {
+			bucket = bucket.Bucket(component)
+			if bucket == nil {
 				return nil
 			}
-			match = ent.Data
 		}
+		if len(i.Name.ImplicitDigestSHA256) != 0 {
+			// directly search for implicit digest
+			k, v := bucket.Cursor().Seek(i.Name.ImplicitDigestSHA256)
+			if k != nil {
+				sel(v)
+			}
+			return nil
+		}
+
+		search(bucket)
 		return nil
 	})
 	return
