@@ -148,10 +148,7 @@ func (c *cache) Get(i *ndn.Interest) (match *ndn.Data) {
 		}
 		if len(i.Name.ImplicitDigestSHA256) != 0 {
 			// directly search for implicit digest
-			k, v := bucket.Cursor().Seek(i.Name.ImplicitDigestSHA256)
-			if k != nil {
-				sel(v)
-			}
+			sel(bucket.Get(i.Name.ImplicitDigestSHA256))
 			return nil
 		}
 
