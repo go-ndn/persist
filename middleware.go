@@ -9,5 +9,7 @@ func Cacher(file string) mux.Middleware {
 	if err != nil {
 		panic(err)
 	}
-	return mux.RawCacher(c, false)
+	return mux.RawCacher(&mux.CacherOptions{
+		Cache: c,
+	})
 }
